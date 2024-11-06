@@ -176,3 +176,36 @@ func CallerWorkflow(ctx workflow.Context) error {
 	return nil
 }
 ```
+
+## Contributing
+
+### Prerequisites
+
+- Go >=1.23
+- [Buf](https://buf.build/docs/installation/)
+
+### Build the plugin
+
+```
+go build ./cmd/...
+```
+
+### Generate code
+
+```
+rm -rf ./gen && PATH=${PWD}:${PATH} buf generate
+```
+
+### Run sanity tests
+
+```
+go test ./...
+```
+
+### Lint code
+
+[Install](https://golangci-lint.run/welcome/install/) the latest version of `golangci-lint` and run:
+
+```
+golangci-lint run ./...
+```

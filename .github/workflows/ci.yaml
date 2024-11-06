@@ -1,0 +1,60 @@
+name: Continuous Integration
+
+on: # rebuild any PRs and main branch changes
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Compile native bridge code for each target platform.
+  # Uploads the native library for each target as a build artifact.
+  build-lint-test:
+    strategy:
+      matrix:
+        runs-on:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    name: Build, Lint, Test (${{ matrix.runs-on }})
+    runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          # TODO: Upgrade proto once https://github.com/arduino/setup-protoc/issues/99 is fixed
+          version: '23.x'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build plugin
+        run: go build ./cmd/protoc-gen-nexus-temporal
+
+      - name: Download buf and run checks
+        uses: bufbuild/buf-action@v1
+        with:
+          # Don't push without running tests.
+          push: false
+          # Protos are just examples, no need to check for breaking changes.
+          breaking: false
+
+      - name: Generate code
+        run: PATH=${PWD}:${PATH} buf generate
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          args: --verbose --timeout 3m --fix=false
+
+      - name: Test
+        run: go test -v ./...
