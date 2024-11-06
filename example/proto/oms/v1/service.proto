@@ -5,7 +5,7 @@ package oms.v1;
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/bergundy/protoc-gen-go-nexus-temporal/gen/oms/v1;oms";
+option go_package = "github.com/bergundy/protoc-gen-nexus-temporal/gen/oms/v1;oms";
 
 service Orders {
   rpc CreateOrder(CreateOrderInput) returns (CreateOrderOutput) {

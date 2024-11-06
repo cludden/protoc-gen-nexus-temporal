@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	oms "github.com/bergundy/protoc-gen-go-nexus-temporal/gen/oms/v1"
+	oms "github.com/bergundy/protoc-gen-nexus-temporal/gen/oms/v1"
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"github.com/stretchr/testify/require"
 	nexuspb "go.temporal.io/api/nexus/v1"

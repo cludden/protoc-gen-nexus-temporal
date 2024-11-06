@@ -1,4 +1,4 @@
-protoc-gen-go-nexus-temporal
+protoc-gen-nexus-temporal
 
 MIT License
 

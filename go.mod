@@ -1,4 +1,4 @@
-module github.com/bergundy/protoc-gen-go-nexus-temporal
+module github.com/bergundy/protoc-gen-nexus-temporal
 
 go 1.23.1
 
@@ -6,6 +6,8 @@ require (
 	github.com/dave/jennifer v1.7.1
 	github.com/nexus-rpc/sdk-go v0.0.10
 	github.com/spf13/pflag v1.0.5
+	github.com/stretchr/testify v1.9.0
+	go.temporal.io/api v1.38.0
 	go.temporal.io/sdk v1.29.1
 	google.golang.org/protobuf v1.34.2
 )
@@ -22,8 +24,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
-	go.temporal.io/api v1.38.0 // indirect
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect

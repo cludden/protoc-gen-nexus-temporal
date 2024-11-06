@@ -1,20 +1,27 @@
-# protoc-gen-go-nexus-temporal
+# protoc-gen-nexus-temporal
 
 A PoC Protobuf plugin for generating Temporal Nexus code.
 
 **⚠️ EXPERIMENTAL: Generated code structure is subject to change as feedback is collected. ⚠️**
 
+Supported languages:
+
+- Golang
+- Java (TBD)
+
 ## Installation
 
 ```
-go install github.com/bergundy/protoc-gen-go-nexus-temporal/cmd/protoc-gen-go_nexus-temporal@latest
+go install github.com/bergundy/protoc-gen-nexus-temporal/cmd/protoc-gen-nexus-temporal@latest
 ```
 
 ## Usage
 
 ### Create a proto file
 
-`example.proto`
+> NOTE: the directory structure here determines the directory structure of the generated files.
+
+`example/v1/service.proto`
 
 ```protobuf
 syntax="proto3";
@@ -69,14 +76,21 @@ managed:
   enabled: true
 plugins:
   - remote: buf.build/protocolbuffers/go
-    out: gen/example/v1
+    out: gen
     opt:
       - paths=source_relative
-  - local: protoc-gen-go_nexus-temporal
-    out: gen/example/v1
+  - local: protoc-gen-nexus-temporal
+    out: gen
     strategy: all
     opt:
       - paths=source_relative
+      - lang=go
+```
+
+### Generate code 
+
+```
+buf generate
 ```
 
 ### Implement a service handler and register it with a Temporal worker
@@ -145,7 +159,7 @@ func CallerWorkflow(ctx workflow.Context) error {
 
 #### Asynchronous Call
 
-```
+```go
 func CallerWorkflow(ctx workflow.Context) error {
 	c := example.NewGreetingNexusClient("example-endpoint")
 	fut := c.StartGreet(ctx, &example.GreetInput{Name: "World"}, workflow.NexusOperationOptions{})
