@@ -11,6 +11,13 @@ Supported languages:
 
 ## Installation
 
+### From GitHub releases (recommended)
+
+1. Download an archive from the [latest release](https://github.com/bergundy/protoc-gen-nexus-temporal/releases/latest).
+2. Extract and add to your system's path.
+
+### Using go install
+
 ```
 go install github.com/bergundy/protoc-gen-nexus-temporal/cmd/protoc-gen-nexus-temporal@latest
 ```
