@@ -46,7 +46,7 @@ jobs:
           version: '~> v2'
           args: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
           BUILD_DATE: ${{ steps.date.outputs.date }}
           BUILD_TS_UNIX: ${{ steps.timestamp.outputs.timestamp }}
           GIT_BRANCH: ${{ steps.branch.outputs.branch }}
