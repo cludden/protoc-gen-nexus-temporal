@@ -1,0 +1,61 @@
+version: 2
+
+before:
+  hooks:
+    - go mod download
+
+release:
+  prerelease: auto
+  draft: false
+  name_template: "v{{.Version}}"
+
+archives:
+  - <<: &archive_defaults
+      name_template: "protoc-gen-nexus-temporal-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    id: nix
+    builds:
+      - nix
+    format: tar.gz
+    files:
+      - LICENSE
+
+  - <<: *archive_defaults
+    id: windows-zip
+    builds:
+      - windows
+    format: zip
+    files:
+      - LICENSE
+
+builds:
+  - <<: &build_defaults
+      dir: cmd/protoc-gen-nexus-temporal
+      binary: protoc-gen-nexus-temporal
+      ldflags:
+        - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}}
+      goarch:
+        - amd64
+        - arm64
+      env:
+        - CGO_ENABLED=0
+    id: nix
+    goos:
+      - linux
+      - darwin
+
+  - <<: *build_defaults
+    id: windows
+    goos:
+      - windows
+    hooks:
+      post: # TODO sign Windows release
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  disable: true
+
+announce:
+  skip: "true"

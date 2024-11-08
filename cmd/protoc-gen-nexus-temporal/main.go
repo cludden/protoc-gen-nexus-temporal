@@ -15,10 +15,10 @@ var (
 )
 
 func main() {
-	flag.Parse()
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
 	if *showVersion {
-		fmt.Printf("protoc-gen-nexus-temporal: %s\n", version)
+		fmt.Printf("protoc-gen-nexus-temporal: %s (%s)\n", version, commit)
 		fmt.Printf("go: %s\n", runtime.Version())
 		return
 	}

@@ -186,8 +186,8 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		})
 
 	for _, method := range svc.Methods {
-		executeMethodName := fmt.Sprintf("%s", method.GoName)
-		startMethodName := fmt.Sprintf("%sAsync", method.GoName)
+		syncMethodName := method.GoName
+		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
 		futureName := fmt.Sprintf("%sFuture", method.GoName)
 		operationNameConst := fmt.Sprintf("%sOperationName", method.GoName)
 		input, output := io(method)
@@ -227,7 +227,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 			ParamsFunc(func(g *jen.Group) {
 				g.Id("c").Op("*").Id(structName)
 			}).
-			Id(startMethodName).
+			Id(asyncMethodName).
 			ParamsFunc(func(g *jen.Group) {
 				g.Id("ctx").Qual(workflowPkg, "Context")
 				if hasInput {
@@ -261,7 +261,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 			ParamsFunc(func(g *jen.Group) {
 				g.Id("c").Op("*").Id(structName)
 			}).
-			Id(executeMethodName).
+			Id(syncMethodName).
 			ParamsFunc(func(g *jen.Group) {
 				g.Id("ctx").Qual(workflowPkg, "Context")
 				if hasInput {
