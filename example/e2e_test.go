@@ -2,10 +2,9 @@ package example
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
-	oms "github.com/bergundy/protoc-gen-nexus-temporal/gen/oms/v1"
+	example "github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1"
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"github.com/stretchr/testify/require"
 	nexuspb "go.temporal.io/api/nexus/v1"
@@ -17,33 +16,77 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+var oneWayClient = example.NewOneWayNexusClient("example-endpoint")
+var twoWayClient = example.NewTwoWayNexusClient("example-endpoint")
+
 func CallerWorkflow(ctx workflow.Context) error {
-	c := oms.NewOrdersNexusClient("orders")
-	output, err := c.ExecuteCreateOrder(ctx, &oms.CreateOrderInput{CustomerId: "foo"}, workflow.NexusOperationOptions{})
+	output, err := oneWayClient.NoInput(ctx, workflow.NexusOperationOptions{})
 	if err != nil {
 		return err
 	}
-	fmt.Println(output.Order)
-	return nil
+	output, err = twoWayClient.Example(ctx, &example.ExampleInput{Foo: output.Foo}, workflow.NexusOperationOptions{})
+	if err != nil {
+		return err
+	}
+
+	return oneWayClient.NoOutput(ctx, &example.ExampleInput{Foo: output.Foo}, workflow.NexusOperationOptions{})
 }
 
-func CreateOrderWorkflow(ctx workflow.Context, input *oms.CreateOrderInput) (*oms.CreateOrderOutput, error) {
-	return &oms.CreateOrderOutput{Order: &oms.Order{Id: "abc"}}, nil
+func CallerWorkflowAsync(ctx workflow.Context) error {
+	oneWayClient := example.NewOneWayNexusClient("example-endpoint")
+	outputFuture := oneWayClient.NoInputAsync(ctx, workflow.NexusOperationOptions{})
+	output, err := outputFuture.GetTyped(ctx)
+	if err != nil {
+		return err
+	}
+
+	exampleFuture := twoWayClient.ExampleAsync(ctx, &example.ExampleInput{Foo: output.Foo}, workflow.NexusOperationOptions{})
+	output, err = exampleFuture.GetTyped(ctx)
+	if err != nil {
+		return err
+	}
+
+	noValueFuture := oneWayClient.NoOutputAsync(ctx, &example.ExampleInput{Foo: output.Foo}, workflow.NexusOperationOptions{})
+	return noValueFuture.Get(ctx, nil)
 }
 
-type ordersHandler struct {
+func TwoWayWorkflow(ctx workflow.Context, input *example.ExampleInput) (*example.ExampleOutput, error) {
+	return &example.ExampleOutput{Foo: input.Foo}, nil
+}
+
+type twoWayHandler struct {
 }
 
 // CreateOrder implements oms.OrdersNexusServiceHandler.
-func (*ordersHandler) CreateOrder(name string) nexus.Operation[*oms.CreateOrderInput, *oms.CreateOrderOutput] {
+func (*twoWayHandler) Example(name string) nexus.Operation[*example.ExampleInput, *example.ExampleOutput] {
 	return temporalnexus.NewWorkflowRunOperation(
 		name,
-		CreateOrderWorkflow,
-		func(ctx context.Context, input *oms.CreateOrderInput, options nexus.StartOperationOptions) (client.StartWorkflowOptions, error) {
+		TwoWayWorkflow,
+		func(ctx context.Context, input *example.ExampleInput, options nexus.StartOperationOptions) (client.StartWorkflowOptions, error) {
 			return client.StartWorkflowOptions{
-				ID: input.GetCustomerId(), // TODO
+				ID: options.RequestID, // Do not use this in production code.
 			}, nil
 		})
+}
+
+type oneWayHandler struct {
+}
+
+// NoInput implements example.OneWayNexusServiceHandler.
+func (*oneWayHandler) NoInput(name string) nexus.Operation[nexus.NoValue, *example.ExampleOutput] {
+	return nexus.NewSyncOperation(name, func(ctx context.Context, e nexus.NoValue, soo nexus.StartOperationOptions) (*example.ExampleOutput, error) {
+		return &example.ExampleOutput{Foo: "bar"}, nil
+	})
+}
+
+// NoOutput implements example.OneWayNexusServiceHandler.
+func (*oneWayHandler) NoOutput(name string) nexus.Operation[*example.ExampleInput, nexus.NoValue] {
+	return nexus.NewSyncOperation(name, func(ctx context.Context, input *example.ExampleInput, soo nexus.StartOperationOptions) (nexus.NoValue, error) {
+		if input.Foo != "bar" {
+			return nil, nexus.HandlerErrorf(nexus.HandlerErrorTypeBadRequest, "input.Foo != bar")
+		}
+		return nil, nil
+	})
 }
 
 func TestE2E(t *testing.T) {
@@ -64,13 +107,15 @@ func TestE2E(t *testing.T) {
 	c, err := client.Dial(client.Options{HostPort: "localhost:7233"})
 	require.NoError(t, err)
 	w := worker.New(c, "example", worker.Options{})
-	oms.RegisterOrdersNexusServiceHandler(w, &ordersHandler{})
+	example.RegisterTwoWayNexusServiceHandler(w, &twoWayHandler{})
+	example.RegisterOneWayNexusServiceHandler(w, &oneWayHandler{})
 	w.RegisterWorkflow(CallerWorkflow)
-	w.RegisterWorkflow(CreateOrderWorkflow)
+	w.RegisterWorkflow(CallerWorkflowAsync)
+	w.RegisterWorkflow(TwoWayWorkflow)
 
 	_, err = c.OperatorService().CreateNexusEndpoint(ctx, &operatorservice.CreateNexusEndpointRequest{
 		Spec: &nexuspb.EndpointSpec{
-			Name: "orders",
+			Name: "example-endpoint",
 			Target: &nexuspb.EndpointTarget{
 				Variant: &nexuspb.EndpointTarget_Worker_{
 					Worker: &nexuspb.EndpointTarget_Worker{
@@ -89,6 +134,12 @@ func TestE2E(t *testing.T) {
 	fut, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		TaskQueue: "example",
 	}, CallerWorkflow)
+	require.NoError(t, err)
+	require.NoError(t, fut.Get(ctx, nil))
+
+	fut, err = c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+		TaskQueue: "example",
+	}, CallerWorkflowAsync)
 	require.NoError(t, err)
 	require.NoError(t, fut.Get(ctx, nil))
 }

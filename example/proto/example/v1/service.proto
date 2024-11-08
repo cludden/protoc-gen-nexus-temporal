@@ -1,0 +1,28 @@
+syntax="proto3";
+
+package example.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1;example";
+
+message ExampleInput {
+  string foo = 1;
+}
+
+message ExampleOutput {
+  string foo = 1;
+}
+
+service OneWay {
+  rpc NoInput(google.protobuf.Empty) returns (ExampleOutput) {
+  }
+  rpc NoOutput(ExampleInput) returns (google.protobuf.Empty) {
+  }
+}
+
+service TwoWay {
+  rpc Example(ExampleInput) returns (ExampleOutput) {
+  }
+}

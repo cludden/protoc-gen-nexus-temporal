@@ -90,6 +90,23 @@ func (p *Plugin) genCodeGenerationHeader(f *jen.File, target *protogen.File) {
 	f.PackageComment(fmt.Sprintf("source: %s", target.Desc.Path()))
 }
 
+func io(method *protogen.Method) (*jen.Statement, *jen.Statement) {
+	var input *jen.Statement
+	if method.Input.Desc.FullName() != "google.protobuf.Empty" {
+		input = jen.Op("*").Qual(string(method.Input.GoIdent.GoImportPath), method.Input.GoIdent.GoName)
+	} else {
+		input = jen.Qual(nexusPkg, "NoValue")
+	}
+
+	var output *jen.Statement
+	if method.Output.Desc.FullName() != "google.protobuf.Empty" {
+		output = jen.Op("*").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName)
+	} else {
+		output = jen.Qual(nexusPkg, "NoValue")
+	}
+	return input, output
+}
+
 func (p *Plugin) genConsts(f *jen.File, svc *protogen.Service) {
 	svcNameConst := fmt.Sprintf("%sServiceName", svc.GoName)
 	svcNameVal := string(svc.Desc.FullName())
@@ -97,11 +114,15 @@ func (p *Plugin) genConsts(f *jen.File, svc *protogen.Service) {
 	f.Const().Id(svcNameConst).Op("=").Lit(svcNameVal)
 
 	for _, method := range svc.Methods {
+		operationVar := fmt.Sprintf("%sOperation", method.GoName)
 		operationNameConst := fmt.Sprintf("%sOperationName", method.GoName)
 		operationNameVal := method.GoName
 
 		f.Commentf("%s defines the fully-qualified name for the %s operation.", operationNameConst, operationNameVal)
 		f.Const().Id(operationNameConst).Op("=").Lit(operationNameVal)
+
+		input, output := io(method)
+		f.Var().Id(operationVar).Op("=").Qual(nexusPkg, "NewOperationReference").Types(input, output).Call(jen.Id(operationNameConst))
 	}
 }
 
@@ -111,9 +132,10 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 	var statements []jen.Code
 
 	for _, method := range svc.Methods {
+		input, output := io(method)
 		st := jen.Id(method.GoName).Params(jen.Id("name").String()).Qual(nexusPkg, "Operation").Types(
-			jen.Op("*").Qual(string(method.Input.GoIdent.GoImportPath), method.Input.GoIdent.GoName),
-			jen.Op("*").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName),
+			input,
+			output,
 		)
 		statements = append(statements, st)
 	}
@@ -127,7 +149,7 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 		g.Id("svc").Dot("Register").CallFunc(func(g *jen.Group) {
 			for _, method := range svc.Methods {
 				operationNameConst := fmt.Sprintf("%sOperationName", method.GoName)
-				g.Id("h").Dot(method.GoName).Call(jen.Id(operationNameConst)).Op(",")
+				g.Id("h").Dot(method.GoName).Call(jen.Id(operationNameConst))
 			}
 		})
 
@@ -138,7 +160,6 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 	structName := fmt.Sprintf("%sNexusClient", svc.GoName)
 
-	// 	f.Commentf("%s provides an internal %s implementation", implName, ifaceName)
 	f.Type().
 		Id(structName).
 		StructFunc(func(g *jen.Group) {
@@ -146,7 +167,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		})
 
 	ctorName := fmt.Sprintf("New%sNexusClient", svc.GoName)
-	f.Commentf("%s initializes a new %s", ctorName, structName)
+	f.Commentf("%s initializes a new %s.", ctorName, structName)
 	f.Func().
 		Id(ctorName).
 		ParamsFunc(func(g *jen.Group) {
@@ -165,38 +186,42 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		})
 
 	for _, method := range svc.Methods {
-		executeMethodName := fmt.Sprintf("Execute%s", method.GoName)
-		startMethodName := fmt.Sprintf("Start%s", method.GoName)
+		executeMethodName := fmt.Sprintf("%s", method.GoName)
+		startMethodName := fmt.Sprintf("%sAsync", method.GoName)
 		futureName := fmt.Sprintf("%sFuture", method.GoName)
 		operationNameConst := fmt.Sprintf("%sOperationName", method.GoName)
+		input, output := io(method)
 
-		f.Type().Id(futureName).StructFunc(func(g *jen.Group) {
-			g.Qual(workflowPkg, "NexusOperationFuture")
-		})
+		hasInput := method.Input.Desc.FullName() != "google.protobuf.Empty"
+		hasOutput := method.Output.Desc.FullName() != "google.protobuf.Empty"
+		if !hasOutput {
+			futureName = "workflow.NexusOperationFuture"
+		}
 
-		f.Func().
-			ParamsFunc(func(g *jen.Group) {
-				g.Id("f").Op("*").Id(futureName)
-			}).
-			Id("GetTyped").
-			ParamsFunc(func(g *jen.Group) {
-				g.Id("ctx").Qual(workflowPkg, "Context")
-			}).
-			ParamsFunc(func(g *jen.Group) {
-				// 		// if hasOutput {
-				g.Op("*").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName)
-				// 		// }
-				g.Error()
-			}).
-			BlockFunc(func(g *jen.Group) {
-				g.Var().Id("output").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName)
-
-				g.Id("err").Op(":=").Id("f").Dot("Get").CallFunc(func(g *jen.Group) {
-					g.Id("ctx")
-					g.Op("&").Id("output")
-				})
-				g.Return().Op("&").Id("output").Op(",").Id("err")
+		if hasOutput {
+			f.Type().Id(futureName).StructFunc(func(g *jen.Group) {
+				g.Qual(workflowPkg, "NexusOperationFuture")
 			})
+
+			f.Func().
+				ParamsFunc(func(g *jen.Group) {
+					g.Id("f").Op("*").Id(futureName)
+				}).
+				Id("GetTyped").
+				ParamsFunc(func(g *jen.Group) {
+					g.Id("ctx").Qual(workflowPkg, "Context")
+				}).
+				Params(output, jen.Error()).
+				BlockFunc(func(g *jen.Group) {
+					g.Var().Id("output").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName)
+
+					g.Id("err").Op(":=").Id("f").Dot("Get").CallFunc(func(g *jen.Group) {
+						g.Id("ctx")
+						g.Op("&").Id("output")
+					})
+					g.Return().Op("&").Id("output").Op(",").Id("err")
+				})
+		}
 
 		f.Func().
 			ParamsFunc(func(g *jen.Group) {
@@ -205,9 +230,9 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 			Id(startMethodName).
 			ParamsFunc(func(g *jen.Group) {
 				g.Id("ctx").Qual(workflowPkg, "Context")
-				// if hasInput {
-				g.Id("input").Op("*").Qual(string(method.Input.GoIdent.GoImportPath), method.Input.GoIdent.GoName)
-				// }
+				if hasInput {
+					g.Id("input").Add(input)
+				}
 				g.Id("options").Qual(workflowPkg, "NexusOperationOptions")
 			}).
 			Id(futureName).
@@ -216,14 +241,20 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 					CallFunc(func(g *jen.Group) {
 						g.Id("ctx")
 						g.Id(operationNameConst)
-						// if hasInput {
-						g.Id("input")
-						// }
+						if hasInput {
+							g.Id("input")
+						} else {
+							g.Nil()
+						}
 						g.Id("options")
 					})
-				g.Return().Id(futureName).BlockFunc(func(g *jen.Group) {
-					g.Id("fut").Op(",")
-				})
+				if hasOutput {
+					g.Return().Id(futureName).BlockFunc(func(g *jen.Group) {
+						g.Id("fut").Op(",")
+					})
+				} else {
+					g.Return().Id("fut")
+				}
 			})
 
 		f.Func().
@@ -233,34 +264,46 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 			Id(executeMethodName).
 			ParamsFunc(func(g *jen.Group) {
 				g.Id("ctx").Qual(workflowPkg, "Context")
-				// if hasInput {
-				g.Id("input").Op("*").Qual(string(method.Input.GoIdent.GoImportPath), method.Input.GoIdent.GoName)
-				// }
+				if hasInput {
+					g.Id("input").Add(input)
+				}
 				g.Id("options").Qual(workflowPkg, "NexusOperationOptions")
 			}).
 			ParamsFunc(func(g *jen.Group) {
-				// if hasOutput {
-				g.Op("*").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName)
-				// }
+				if hasOutput {
+					g.Add(output)
+				}
 				g.Error()
 			}).
 			BlockFunc(func(g *jen.Group) {
-				g.Var().Id("output").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName)
+				if hasOutput {
+					g.Var().Id("output").Qual(string(method.Output.GoIdent.GoImportPath), method.Output.GoIdent.GoName)
+				}
 
 				g.Id("fut").Op(":=").Id("c").Dot("client").Dot("ExecuteOperation").
 					CallFunc(func(g *jen.Group) {
 						g.Id("ctx")
 						g.Id(operationNameConst)
-						// if hasInput {
-						g.Id("input")
-						// }
+						if hasInput {
+							g.Id("input")
+						} else {
+							g.Nil()
+						}
 						g.Id("options")
 					})
-				g.Id("err").Op(":=").Id("fut").Dot("Get").CallFunc(func(g *jen.Group) {
-					g.Id("ctx")
-					g.Op("&").Id("output")
-				})
-				g.Return().Op("&").Id("output").Op(",").Id("err")
+				if hasOutput {
+					g.Id("err").Op(":=").Id("fut").Dot("Get").CallFunc(func(g *jen.Group) {
+						g.Id("ctx")
+						g.Op("&").Id("output")
+					})
+					g.Return().Op("&").Id("output").Op(",").Id("err")
+				} else {
+					g.Id("err").Op(":=").Id("fut").Dot("Get").CallFunc(func(g *jen.Group) {
+						g.Id("ctx")
+						g.Nil()
+					})
+					g.Return().Id("err")
+				}
 			})
 	}
 }

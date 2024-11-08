@@ -148,11 +148,11 @@ func main() {
 ```go
 func CallerWorkflow(ctx workflow.Context) error {
 	c := example.NewGreetingNexusClient("example-endpoint")
-	output, err := c.ExecuteGreet(ctx, &example.GreetInput{Name: "World"}, workflow.NexusOperationOptions{})
+	output, err := c.Greet(ctx, &example.GreetInput{Name: "World"}, workflow.NexusOperationOptions{})
 	if err != nil {
 		return err
 	}
-	workflow.GetLogger(ctx).Info("Got greeting", output.Greeting)
+	workflow.GetLogger(ctx).Info("Got greeting", "greeting", output.Greeting)
 	return nil
 }
 ```
@@ -162,7 +162,7 @@ func CallerWorkflow(ctx workflow.Context) error {
 ```go
 func CallerWorkflow(ctx workflow.Context) error {
 	c := example.NewGreetingNexusClient("example-endpoint")
-	fut := c.StartGreet(ctx, &example.GreetInput{Name: "World"}, workflow.NexusOperationOptions{})
+	fut := c.GreetAsync(ctx, &example.GreetInput{Name: "World"}, workflow.NexusOperationOptions{})
 	exec := workflow.NexusOperationExecution{}
 	// Wait for operation to be started.
 	if err := fut.GetNexusOperationExecution().Get(ctx, &exec); err != nil {
@@ -172,7 +172,7 @@ func CallerWorkflow(ctx workflow.Context) error {
 	if err != nil {
 		return err
 	}
-	workflow.GetLogger(ctx).Info("Got greeting", output.Greeting)
+	workflow.GetLogger(ctx).Info("Got greeting", "greeting", output.Greeting)
 	return nil
 }
 ```
