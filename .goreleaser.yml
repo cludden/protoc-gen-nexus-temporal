@@ -17,7 +17,7 @@ archives:
       - nix
     format: tar.gz
     files:
-      - LICENSE
+      - LICENSE.md
 
   - <<: *archive_defaults
     id: windows-zip
@@ -25,7 +25,7 @@ archives:
       - windows
     format: zip
     files:
-      - LICENSE
+      - LICENSE.md
 
 builds:
   - <<: &build_defaults
