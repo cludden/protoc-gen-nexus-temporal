@@ -127,9 +127,9 @@ func (*greetingHandler) Greet(name string) nexus.Operation[*example.GreetInput, 
 	return temporalnexus.NewWorkflowRunOperation(
 		// The name of the Greet operation as defined in the proto.
 		name,
-        // Workflow to expose as the operation.
-        // Input must match the operation input using this builder. See `NewWorkflowRunOperationWithOptions` for
-        // exposing workflows with alternative signatures.
+		// Workflow to expose as the operation.
+		// Input must match the operation input using this builder. See `NewWorkflowRunOperationWithOptions` for
+		// exposing workflows with alternative signatures.
 		GreetWorkflow,
 		func(ctx context.Context, input *example.GreetInput, options nexus.StartOperationOptions) (client.StartWorkflowOptions, error) {
 			return client.StartWorkflowOptions{
@@ -141,10 +141,12 @@ func (*greetingHandler) Greet(name string) nexus.Operation[*example.GreetInput, 
 func main() {
 	c, _ := client.Dial(client.Options{HostPort: "localhost:7233"})
 	w := worker.New(c, "example", worker.Options{})
-    // All operations will automatically be registered on the service.
+	// All operations will automatically be registered on the service.
 	example.RegisterGreetingNexusServiceHandler(w, &greetingHandler{})
-    // Workflows need to be registered separately.
+	// Workflows need to be registered separately.
 	w.RegisterWorkflow(GreetWorkflow)
+
+	_ = w.Run(worker.InterruptCh())
 }
 ```
 
