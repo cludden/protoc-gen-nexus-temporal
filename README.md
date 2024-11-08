@@ -1,6 +1,6 @@
 # protoc-gen-nexus-temporal
 
-A PoC Protobuf plugin for generating Temporal Nexus code.
+A Protobuf plugin for generating Temporal Nexus code.
 
 **⚠️ EXPERIMENTAL: Generated code structure is subject to change as feedback is collected. ⚠️**
 
