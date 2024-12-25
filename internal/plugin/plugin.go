@@ -2,6 +2,8 @@ package plugin
 
 import (
 	"fmt"
+	"path"
+	"path/filepath"
 	"runtime"
 
 	"github.com/dave/jennifer/jen"
@@ -10,8 +12,11 @@ import (
 )
 
 const nexusPkg = "github.com/nexus-rpc/sdk-go/nexus"
-const workerPkg = "go.temporal.io/sdk/worker"
 const workflowPkg = "go.temporal.io/sdk/workflow"
+
+const generatedFilenameExtension = "_nexus_temporal.pb.go"
+const generatedPackageSuffix = "nexustemporal"
+const generatedNexusPackageSuffix = "nexus"
 
 var multiLineValues = jen.Options{
 	Close:     "}",
@@ -58,16 +63,42 @@ func (p *Plugin) Run(plugin *protogen.Plugin) error {
 			continue
 		}
 
-		f := jen.NewFilePathName(string(file.GoImportPath), string(file.GoPackageName))
+		nexusPkgName := path.Join(
+			string(file.GoImportPath),
+			string(file.GoPackageName+generatedNexusPackageSuffix),
+		)
+		file.GoPackageName += generatedPackageSuffix
+		prefixToSlash := filepath.ToSlash(file.GeneratedFilenamePrefix)
+		file.GeneratedFilenamePrefix = path.Join(
+			path.Dir(prefixToSlash),
+			string(file.GoPackageName),
+			path.Base(prefixToSlash),
+		)
+		importPath := path.Join(
+			string(file.GoImportPath),
+			string(file.GoPackageName),
+		)
+
+		f := jen.NewFilePathName(importPath, string(file.GoPackageName))
+
 		p.genCodeGenerationHeader(f, file)
 
+		var hasContent bool
 		for _, svc := range file.Services {
-			p.genConsts(f, svc)
-			p.genHandler(f, svc)
-			p.genClient(f, svc)
+			hasContent = true
+			p.genClient(f, svc, nexusPkgName)
 		}
 
-		if err := f.Render(p.Plugin.NewGeneratedFile(fmt.Sprintf("%s_nexus_temporal.pb.go", file.GeneratedFilenamePrefix), file.GoImportPath)); err != nil {
+		if !hasContent {
+			continue
+		}
+
+		if err := f.Render(
+			p.Plugin.NewGeneratedFile(
+				file.GeneratedFilenamePrefix+generatedFilenameExtension,
+				protogen.GoImportPath(importPath),
+			),
+		); err != nil {
 			return fmt.Errorf("error rendering file: %w", err)
 		}
 	}
@@ -90,7 +121,7 @@ func (p *Plugin) genCodeGenerationHeader(f *jen.File, target *protogen.File) {
 	f.PackageComment(fmt.Sprintf("source: %s", target.Desc.Path()))
 }
 
-func io(method *protogen.Method) (*jen.Statement, *jen.Statement) {
+func methodIO(method *protogen.Method) (*jen.Statement, *jen.Statement) {
 	var input *jen.Statement
 	if method.Input.Desc.FullName() != "google.protobuf.Empty" {
 		input = jen.Op("*").Qual(string(method.Input.GoIdent.GoImportPath), method.Input.GoIdent.GoName)
@@ -107,57 +138,7 @@ func io(method *protogen.Method) (*jen.Statement, *jen.Statement) {
 	return input, output
 }
 
-func (p *Plugin) genConsts(f *jen.File, svc *protogen.Service) {
-	svcNameConst := fmt.Sprintf("%sServiceName", svc.GoName)
-	svcNameVal := string(svc.Desc.FullName())
-	f.Commentf("%s defines the fully-qualified name for the %s service.", svcNameConst, svcNameVal)
-	f.Const().Id(svcNameConst).Op("=").Lit(svcNameVal)
-
-	for _, method := range svc.Methods {
-		operationVar := fmt.Sprintf("%sOperation", method.GoName)
-		operationNameConst := fmt.Sprintf("%sOperationName", method.GoName)
-		operationNameVal := method.GoName
-
-		f.Commentf("%s defines the fully-qualified name for the %s operation.", operationNameConst, operationNameVal)
-		f.Const().Id(operationNameConst).Op("=").Lit(operationNameVal)
-
-		input, output := io(method)
-		f.Var().Id(operationVar).Op("=").Qual(nexusPkg, "NewOperationReference").Types(input, output).Call(jen.Id(operationNameConst))
-	}
-}
-
-func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
-	ifaceName := fmt.Sprintf("%sNexusServiceHandler", svc.GoName)
-
-	var statements []jen.Code
-
-	for _, method := range svc.Methods {
-		input, output := io(method)
-		st := jen.Id(method.GoName).Params(jen.Id("name").String()).Qual(nexusPkg, "Operation").Types(
-			input,
-			output,
-		)
-		statements = append(statements, st)
-	}
-	f.Type().Id(ifaceName).Interface(statements...)
-
-	f.Func().Id(fmt.Sprintf("Register%s", ifaceName)).Params(
-		jen.Id("r").Qual(workerPkg, "NexusServiceRegistry"),
-		jen.Id("h").Id(ifaceName),
-	).BlockFunc(func(g *jen.Group) {
-		g.Id("svc").Op(":=").Qual(nexusPkg, "NewService").Call(jen.Id(fmt.Sprintf("%sServiceName", svc.GoName)))
-		g.Id("svc").Dot("Register").CallFunc(func(g *jen.Group) {
-			for _, method := range svc.Methods {
-				operationNameConst := fmt.Sprintf("%sOperationName", method.GoName)
-				g.Id("h").Dot(method.GoName).Call(jen.Id(operationNameConst))
-			}
-		})
-
-		g.Id("r").Dot("RegisterNexusService").Call(jen.Id("svc"))
-	})
-}
-
-func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
+func (p *Plugin) genClient(f *jen.File, svc *protogen.Service, nexusPkgPath string) {
 	structName := fmt.Sprintf("%sNexusClient", svc.GoName)
 
 	f.Type().
@@ -179,7 +160,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 				g.Op("&").Id(structName).CustomFunc(multiLineValues, func(g *jen.Group) {
 					g.Id("client").Op(":").Qual(workflowPkg, "NewNexusClient").CallFunc(func(g *jen.Group) {
 						g.Id("endpoint")
-						g.Id(fmt.Sprintf("%sServiceName", svc.GoName))
+						g.Qual(nexusPkgPath, fmt.Sprintf("%sServiceName", svc.GoName))
 					})
 				})
 			})
@@ -189,8 +170,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		syncMethodName := method.GoName
 		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
 		futureName := fmt.Sprintf("%sFuture", method.GoName)
-		operationNameConst := fmt.Sprintf("%sOperationName", method.GoName)
-		input, output := io(method)
+		input, output := methodIO(method)
 
 		hasInput := method.Input.Desc.FullName() != "google.protobuf.Empty"
 		hasOutput := method.Output.Desc.FullName() != "google.protobuf.Empty"
@@ -240,7 +220,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 				g.Id("fut").Op(":=").Id("c").Dot("client").Dot("ExecuteOperation").
 					CallFunc(func(g *jen.Group) {
 						g.Id("ctx")
-						g.Id(operationNameConst)
+						g.Qual(nexusPkgPath, operationNameConst(svc, method))
 						if hasInput {
 							g.Id("input")
 						} else {
@@ -283,7 +263,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 				g.Id("fut").Op(":=").Id("c").Dot("client").Dot("ExecuteOperation").
 					CallFunc(func(g *jen.Group) {
 						g.Id("ctx")
-						g.Id(operationNameConst)
+						g.Qual(nexusPkgPath, operationNameConst(svc, method))
 						if hasInput {
 							g.Id("input")
 						} else {
@@ -306,4 +286,8 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 				}
 			})
 	}
+}
+
+func operationNameConst(svc *protogen.Service, method *protogen.Method) string {
+	return fmt.Sprintf("%s%sOperationName", svc.GoName, method.GoName)
 }

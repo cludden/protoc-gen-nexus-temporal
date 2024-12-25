@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	example "github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1"
+	"github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1/examplenexus"
+	"github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1/examplenexustemporal"
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"github.com/stretchr/testify/require"
 	nexuspb "go.temporal.io/api/nexus/v1"
@@ -16,8 +18,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-var oneWayClient = example.NewOneWayNexusClient("example-endpoint")
-var twoWayClient = example.NewTwoWayNexusClient("example-endpoint")
+var oneWayClient = examplenexustemporal.NewOneWayNexusClient("example-endpoint")
+var twoWayClient = examplenexustemporal.NewTwoWayNexusClient("example-endpoint")
 
 func CallerWorkflow(ctx workflow.Context) error {
 	output, err := oneWayClient.NoInput(ctx, workflow.NexusOperationOptions{})
@@ -33,7 +35,6 @@ func CallerWorkflow(ctx workflow.Context) error {
 }
 
 func CallerWorkflowAsync(ctx workflow.Context) error {
-	oneWayClient := example.NewOneWayNexusClient("example-endpoint")
 	outputFuture := oneWayClient.NoInputAsync(ctx, workflow.NexusOperationOptions{})
 	output, err := outputFuture.GetTyped(ctx)
 	if err != nil {
@@ -55,6 +56,7 @@ func TwoWayWorkflow(ctx workflow.Context, input *example.ExampleInput) (*example
 }
 
 type twoWayHandler struct {
+	examplenexus.UnimplementedTwoWayNexusServiceHandler
 }
 
 // CreateOrder implements oms.OrdersNexusServiceHandler.
@@ -70,6 +72,7 @@ func (*twoWayHandler) Example(name string) nexus.Operation[*example.ExampleInput
 }
 
 type oneWayHandler struct {
+	examplenexus.UnimplementedOneWayNexusServiceHandler
 }
 
 // NoInput implements example.OneWayNexusServiceHandler.
@@ -107,8 +110,12 @@ func TestE2E(t *testing.T) {
 	c, err := client.Dial(client.Options{HostPort: "localhost:7233"})
 	require.NoError(t, err)
 	w := worker.New(c, "example", worker.Options{})
-	example.RegisterTwoWayNexusServiceHandler(w, &twoWayHandler{})
-	example.RegisterOneWayNexusServiceHandler(w, &oneWayHandler{})
+	oneWaySvc, err := examplenexus.NewOneWayNexusService(&oneWayHandler{})
+	require.NoError(t, err)
+	twoWaySvc, err := examplenexus.NewTwoWayNexusService(&twoWayHandler{})
+	require.NoError(t, err)
+	w.RegisterNexusService(oneWaySvc)
+	w.RegisterNexusService(twoWaySvc)
 	w.RegisterWorkflow(CallerWorkflow)
 	w.RegisterWorkflow(CallerWorkflowAsync)
 	w.RegisterWorkflow(TwoWayWorkflow)

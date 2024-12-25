@@ -24,6 +24,10 @@ go install github.com/bergundy/protoc-gen-nexus-temporal/cmd/protoc-gen-nexus-te
 
 ## Usage
 
+### Install protoc-gen-nexus
+
+Follow instruction in the repo's [README](https://github.com/bergundy/protoc-gen-nexus?tab=readme-ov-file#installation).
+
 ### Create a proto file
 
 > NOTE: the directory structure here determines the directory structure of the generated files.
@@ -79,6 +83,7 @@ breaking:
 
 ```yaml
 version: v2
+clean: true
 managed:
   enabled: true
 plugins:
@@ -86,6 +91,12 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
+  - local: protoc-gen-nexus
+    out: gen
+    strategy: all
+    opt:
+      - paths=source_relative
+      - lang=go
   - local: protoc-gen-nexus-temporal
     out: gen
     strategy: all
@@ -103,12 +114,12 @@ buf generate
 ### Implement a service handler and register it with a Temporal worker
 
 ```go
-package main
-
 import (
 	"context"
+	"log"
 
 	example "github.com/bergundy/greet-nexus-example/gen/example/v1"
+	examplenexus "github.com/bergundy/greet-nexus-example/gen/example/v1/examplenexus"
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporalnexus"
@@ -121,6 +132,7 @@ func GreetWorkflow(ctx workflow.Context, input *example.GreetInput) (*example.Gr
 }
 
 type greetingHandler struct {
+	examplenexus.UnimplementedGreetingNexusServiceHandler
 }
 
 func (*greetingHandler) Greet(name string) nexus.Operation[*example.GreetInput, *example.GreetOutput] {
@@ -139,14 +151,23 @@ func (*greetingHandler) Greet(name string) nexus.Operation[*example.GreetInput, 
 }
 
 func main() {
-	c, _ := client.Dial(client.Options{HostPort: "localhost:7233"})
+	c, err := client.Dial(client.Options{HostPort: "localhost:7233"})
+	if err != nil {
+		log.Fatal(err)
+	}
 	w := worker.New(c, "example", worker.Options{})
 	// All operations will automatically be registered on the service.
-	example.RegisterGreetingNexusServiceHandler(w, &greetingHandler{})
+	oneWaySvc, err := examplenexus.NewGreetingNexusService(&greetingHandler{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	w.RegisterNexusService(oneWaySvc)
 	// Workflows need to be registered separately.
 	w.RegisterWorkflow(GreetWorkflow)
 
-	_ = w.Run(worker.InterruptCh())
+	if err = w.Run(worker.InterruptCh()); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -155,8 +176,14 @@ func main() {
 #### Synchronous Call
 
 ```go
+import (
+	"github.com/bergundy/greet-nexus-example/gen/example/v1"
+	"github.com/bergundy/greet-nexus-example/gen/example/v1/examplenexustemporal"
+	"go.temporal.io/sdk/workflow"
+)
+
 func CallerWorkflow(ctx workflow.Context) error {
-	c := example.NewGreetingNexusClient("example-endpoint")
+	c := examplenexustemporal.NewGreetingNexusClient("example-endpoint")
 	output, err := c.Greet(ctx, &example.GreetInput{Name: "World"}, workflow.NexusOperationOptions{})
 	if err != nil {
 		return err
@@ -170,7 +197,7 @@ func CallerWorkflow(ctx workflow.Context) error {
 
 ```go
 func CallerWorkflow(ctx workflow.Context) error {
-	c := example.NewGreetingNexusClient("example-endpoint")
+	c := examplenexustemporal.NewGreetingNexusClient("example-endpoint")
 	fut := c.GreetAsync(ctx, &example.GreetInput{Name: "World"}, workflow.NexusOperationOptions{})
 	exec := workflow.NexusOperationExecution{}
 	// Wait for operation to be started.
