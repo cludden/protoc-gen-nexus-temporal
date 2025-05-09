@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	example "github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1"
-	"github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1/examplenexus"
-	"github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1/examplenexustemporal"
+	example "github.com/bergundy/protoc-gen-go-nexus-temporal/gen/example/v1"
+	"github.com/bergundy/protoc-gen-go-nexus-temporal/gen/example/v1/examplenexus"
+	"github.com/bergundy/protoc-gen-go-nexus-temporal/gen/example/v1/examplenexustemporal"
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"github.com/stretchr/testify/require"
 	nexuspb "go.temporal.io/api/nexus/v1"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/bergundy/protoc-gen-nexus-temporal/internal/plugin"
+	"github.com/bergundy/protoc-gen-go-nexus-temporal/internal/plugin"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
@@ -18,7 +18,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
-		fmt.Printf("protoc-gen-nexus-temporal: %s (%s)\n", version, commit)
+		fmt.Printf("protoc-gen-go-nexus-temporal: %s (%s)\n", version, commit)
 		fmt.Printf("go: %s\n", runtime.Version())
 		return
 	}

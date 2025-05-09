@@ -1,4 +1,4 @@
-module github.com/bergundy/protoc-gen-nexus-temporal
+module github.com/bergundy/protoc-gen-go-nexus-temporal
 
 go 1.23.4
 

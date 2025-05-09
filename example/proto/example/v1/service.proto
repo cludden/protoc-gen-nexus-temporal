@@ -5,7 +5,7 @@ package example.v1;
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/bergundy/protoc-gen-nexus-temporal/gen/example/v1;example";
+option go_package = "github.com/bergundy/protoc-gen-go-nexus-temporal/gen/example/v1;example";
 
 message ExampleInput {
   string foo = 1;

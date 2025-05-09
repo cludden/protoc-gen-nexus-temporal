@@ -1,6 +1,6 @@
-# protoc-gen-nexus-temporal
+# protoc-gen-go-nexus-temporal
 
-A Protobuf plugin for generating Temporal Nexus code.
+A Protobuf plugin for generating Temporal Nexus Go workflow clients.
 
 **⚠️ EXPERIMENTAL: Generated code structure is subject to change as feedback is collected. ⚠️**
 
@@ -13,20 +13,25 @@ Supported languages:
 
 ### From GitHub releases (recommended)
 
-1. Download an archive from the [latest release](https://github.com/bergundy/protoc-gen-nexus-temporal/releases/latest).
+1. Download an archive from the [latest release](https://github.com/bergundy/protoc-gen-go-nexus-temporal/releases/latest).
 2. Extract and add to your system's path.
 
 ### Using go install
 
 ```
-go install github.com/bergundy/protoc-gen-nexus-temporal/cmd/protoc-gen-nexus-temporal@latest
+go install github.com/bergundy/protoc-gen-go-nexus-temporal/cmd/protoc-gen-go-nexus-temporal@latest
 ```
 
 ## Usage
 
-### Install protoc-gen-nexus
+### Install protoc-gen-go-nexus
 
-Follow instruction in the repo's [README](https://github.com/bergundy/protoc-gen-nexus?tab=readme-ov-file#installation).
+Follow instruction in the repo's [README](https://github.com/bergundy/protoc-gen-go-nexus?tab=readme-ov-file#installation).
+
+### Customize code generation
+
+Follow the instructions in [nexus-proto-annotations](https://github.com/bergundy/nexus-proto-annotations) for modifying
+the service and operation names and tagging for includes and excludes.
 
 ### Create a proto file
 
@@ -91,18 +96,26 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
-  - local: protoc-gen-nexus
+  - local: protoc-gen-go-nexus
     out: gen
     strategy: all
     opt:
       - paths=source_relative
-      - lang=go
-  - local: protoc-gen-nexus-temporal
+      # Optionally include or exclude operations and services
+      # - include-service-tags=my-include-tag
+      # - exclude-service-tags=my-exclude-tag
+      # - include-operation-tags=my-include-tag
+      # - exclude-operation-tags=my-exclude-tag
+  - local: protoc-gen-go-nexus-temporal
     out: gen
     strategy: all
     opt:
       - paths=source_relative
-      - lang=go
+      # Optionally include or exclude operations and services
+      # - include-service-tags=my-include-tag
+      # - exclude-service-tags=my-exclude-tag
+      # - include-operation-tags=my-include-tag
+      # - exclude-operation-tags=my-exclude-tag
 ```
 
 ### Generate code 

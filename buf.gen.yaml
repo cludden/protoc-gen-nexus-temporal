@@ -6,15 +6,13 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
-  - local: protoc-gen-nexus
+  - local: protoc-gen-go-nexus
     out: gen
     strategy: all
     opt:
       - paths=source_relative
-      - lang=go
-  - local: protoc-gen-nexus-temporal
+  - local: protoc-gen-go-nexus-temporal
     out: gen
     strategy: all
     opt:
       - paths=source_relative
-      - lang=go

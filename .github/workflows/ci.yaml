@@ -39,7 +39,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build plugin
-        run: go build ./cmd/protoc-gen-nexus-temporal
+        run: go build ./cmd/protoc-gen-go-nexus-temporal
 
       - name: Download buf and run checks
         uses: bufbuild/buf-action@v1
@@ -49,8 +49,8 @@ jobs:
           # Protos are just examples, no need to check for breaking changes.
           breaking: false
 
-      - name: Install the protoc-gen-nexus dependency
-        run: go install github.com/bergundy/protoc-gen-nexus/cmd/protoc-gen-nexus@latest
+      - name: Install the protoc-gen-go-nexus dependency
+        run: go install github.com/bergundy/protoc-gen-go-nexus/cmd/protoc-gen-go-nexus@latest
 
       - name: Generate code
         run: PATH=${PWD}:${PATH} buf generate

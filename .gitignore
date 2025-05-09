@@ -1,3 +1,3 @@
 gen
 dist
-protoc-gen-nexus-temporal
+protoc-gen-go-nexus-temporal
