@@ -56,7 +56,7 @@ func TwoWayWorkflow(ctx workflow.Context, input *example.ExampleInput) (*example
 }
 
 type twoWayHandler struct {
-	examplenexus.UnimplementedTwoWayNexusServiceHandler
+	examplenexus.UnimplementedTwoWayNexusHandler
 }
 
 // CreateOrder implements oms.OrdersNexusServiceHandler.
@@ -72,7 +72,7 @@ func (*twoWayHandler) Example(name string) nexus.Operation[*example.ExampleInput
 }
 
 type oneWayHandler struct {
-	examplenexus.UnimplementedOneWayNexusServiceHandler
+	examplenexus.UnimplementedOneWayNexusHandler
 }
 
 // NoInput implements example.OneWayNexusServiceHandler.
@@ -99,10 +99,6 @@ func TestE2E(t *testing.T) {
 			HostPort: "0.0.0.0:7233",
 		},
 		EnableUI: true,
-		ExtraArgs: []string{
-			"--http-port", "7243",
-			"--dynamic-config-value", "system.enableNexus=true",
-		},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, srv.Stop()) })

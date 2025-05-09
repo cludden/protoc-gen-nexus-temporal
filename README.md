@@ -145,7 +145,7 @@ func GreetWorkflow(ctx workflow.Context, input *example.GreetInput) (*example.Gr
 }
 
 type greetingHandler struct {
-	examplenexus.UnimplementedGreetingNexusServiceHandler
+	examplenexus.UnimplementedGreetingNexusHandler
 }
 
 func (*greetingHandler) Greet(name string) nexus.Operation[*example.GreetInput, *example.GreetOutput] {
