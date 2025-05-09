@@ -5,10 +5,13 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 
+	nexusv1 "github.com/bergundy/nexus-proto-annotations/go/nexus/v1"
 	"github.com/dave/jennifer/jen"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/proto"
 )
 
 const nexusPkg = "github.com/nexus-rpc/sdk-go/nexus"
@@ -27,9 +30,13 @@ var multiLineValues = jen.Options{
 
 type Plugin struct {
 	*protogen.Plugin
-	version string
-	commit  string
-	flags   *pflag.FlagSet
+	version              string
+	commit               string
+	includeServiceTags   map[string]struct{}
+	excludeServiceTags   map[string]struct{}
+	includeOperationTags map[string]struct{}
+	excludeOperationTags map[string]struct{}
+	flags                *pflag.FlagSet
 }
 
 func New(version, commit string) *Plugin {
@@ -39,6 +46,10 @@ func New(version, commit string) *Plugin {
 		commit:  commit,
 		flags:   flags,
 	}
+	flags.StringArray("include-service-tags", []string{}, "include only services with these tags")
+	flags.StringArray("exclude-service-tags", []string{}, "exclude any services with these tags")
+	flags.StringArray("include-operation-tags", []string{}, "include only operations with these tags")
+	flags.StringArray("exclude-operation-tags", []string{}, "exclude any operations with these tags")
 
 	return p
 }
@@ -47,7 +58,39 @@ func (p *Plugin) Param(key, value string) error {
 	return p.flags.Set(key, value)
 }
 
+func (p *Plugin) getTags(name string) (map[string]struct{}, error) {
+	tags, err := p.flags.GetStringArray(name)
+	if err != nil {
+		return nil, fmt.Errorf("could not get include-tags flag: %w", err)
+	}
+	tagsMap := make(map[string]struct{}, len(tags))
+	for _, t := range tags {
+		tagsMap[t] = struct{}{}
+	}
+	return tagsMap, nil
+}
+
+func (p *Plugin) init() error {
+	var err error
+	if p.includeServiceTags, err = p.getTags("include-service-tags"); err != nil {
+		return err
+	}
+	if p.excludeServiceTags, err = p.getTags("exclude-service-tags"); err != nil {
+		return err
+	}
+	if p.includeOperationTags, err = p.getTags("include-operation-tags"); err != nil {
+		return err
+	}
+	if p.excludeOperationTags, err = p.getTags("exclude-operation-tags"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (p *Plugin) Run(plugin *protogen.Plugin) error {
+	if err := p.init(); err != nil {
+		return err
+	}
 	p.Plugin = plugin
 	for _, file := range plugin.Files {
 		if !file.Generate {
@@ -76,6 +119,16 @@ func (p *Plugin) Run(plugin *protogen.Plugin) error {
 
 		var hasContent bool
 		for _, svc := range file.Services {
+			// Entire service excluded.
+			if !p.shouldIncludeService(svc) {
+				continue
+			}
+			// All methods excluded.
+			if !slices.ContainsFunc(svc.Methods, func(m *protogen.Method) bool {
+				return p.shouldIncludeOperation(m)
+			}) {
+				continue
+			}
 			hasContent = true
 			p.genClient(f, svc, nexusPkgName)
 		}
@@ -158,6 +211,9 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service, nexusPkgPath stri
 		})
 
 	for _, method := range svc.Methods {
+		if !p.shouldIncludeOperation(method) {
+			continue
+		}
 		syncMethodName := method.GoName
 		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
 		futureName := fmt.Sprintf("%sFuture", method.GoName)
@@ -279,6 +335,46 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service, nexusPkgPath stri
 	}
 }
 
+func (p *Plugin) shouldIncludeService(svc *protogen.Service) bool {
+	tags := serviceOptions(svc).GetTags()
+	if len(p.includeServiceTags) > 0 && !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.includeServiceTags[t]
+		return ok
+	}) {
+		return false
+	}
+	return !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.excludeServiceTags[t]
+		return ok
+	})
+}
+
+func (p *Plugin) shouldIncludeOperation(m *protogen.Method) bool {
+	tags := operationOptions(m).GetTags()
+	if len(p.includeOperationTags) > 0 && !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.includeOperationTags[t]
+		return ok
+	}) {
+		return false
+	}
+	return !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.excludeOperationTags[t]
+		return ok
+	})
+}
+
 func operationNameConst(svc *protogen.Service, method *protogen.Method) string {
 	return fmt.Sprintf("%s%sOperationName", svc.GoName, method.GoName)
+}
+
+// operationOptions returns the OperationOptions for the given proto Method
+func operationOptions(m *protogen.Method) *nexusv1.OperationOptions {
+	opts, _ := proto.GetExtension(m.Desc.Options(), nexusv1.E_Operation).(*nexusv1.OperationOptions)
+	return opts
+}
+
+// serviceOptions returns the ServiceOptions for the given proto Service
+func serviceOptions(svc *protogen.Service) *nexusv1.ServiceOptions {
+	opts, _ := proto.GetExtension(svc.Desc.Options(), nexusv1.E_Service).(*nexusv1.ServiceOptions)
+	return opts
 }
